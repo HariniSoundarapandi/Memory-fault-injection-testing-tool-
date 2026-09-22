@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory Fault Injection Testing Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12151a;
+    --panel:#181d25;
+    --panel-alt:#1f2530;
+    --border:#2a313d;
+    --border-bright:#3a4453;
+    --text:#e7ecf3;
+    --text-dim:#8993a6;
+    --text-faint:#5c6577;
+    --accent:#4fd8c4;
+    --accent-dim:#2e6b62;
+    --amber:#f4b860;
+    --danger:#ff6b6b;
+    --danger-dim:#5a2a2a;
+    --good:#6ee7a8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;}
+  button{font-family:inherit; cursor:pointer;}
+
+  /* ---------- layout ---------- */
+  .app{
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 28px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, #151920, #12151a);
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .brand h1{
+    font-size:17px;
+    font-weight:600;
+    letter-spacing:0.2px;
+  }
+  .brand p{
+    font-size:12.5px;
+    color:var(--text-dim);
+    margin-top:3px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .status-pill{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--accent);
+    border:1px solid var(--accent-dim);
+    background:rgba(79,216,196,0.07);
+    padding:6px 12px;
+    border-radius:3px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    white-space:nowrap;
+  }
+  .status-dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 6px var(--accent);
+  }
+
+  .body-wrap{
+    display:flex;
+    flex:1;
+    min-height:0;
+  }
+
+  nav.sidebar{
+    width:196px;
+    flex-shrink:0;
+    border-right:1px solid var(--border);
+    padding:18px 10px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  nav.sidebar button{
+    background:none;
+    border:none;
+    color:var(--text-dim);
+    text-align:left;
+    padding:10px 12px;
+    border-radius:4px;
+    font-size:13.5px;
+    font-weight:500;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    border-left:2px solid transparent;
+  }
+  nav.sidebar button .ico{
+    width:14px; text-align:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-faint);
+  }
+  nav.sidebar button:hover{ color:var(--text); background:var(--panel-alt); }
+  nav.sidebar button.active{
+    color:var(--text);
+    background:var(--panel-alt);
+    border-left:2px solid var(--accent);
+  }
+  nav.sidebar button.active .ico{ color:var(--accent); }
+
+  main{
+    flex:1;
+    padding:26px 30px 60px;
+    overflow-y:auto;
+    min-width:0;
+  }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .view-title{
+    font-size:15px;
+    font-weight:600;
+    margin-bottom:4px;
+  }
+  .view-sub{
+    font-size:12.5px;
+    color:var(--text-dim);
+    margin-bottom:22px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+
+  /* ---------- stat cards ---------- */
+  .stats-row{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    margin-bottom:22px;
+  }
+  .stat-card{
+    background:var(--panel);
+    padding:14px 16px;
+  }
+  .stat-label{
+    font-size:10.5px;
+    color:var(--text-faint);
+    font-family:'IBM Plex Mono',monospace;
+    margin-bottom:8px;
+  }
+  .stat-value{
+    font-size:22px;
+    font-weight:600;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .stat-value.good{ color:var(--good); }
+  .stat-value.bad{ color:var(--danger); }
+  .stat-value.accent{ color:var(--accent); }
+
+  /* ---------- panels ---------- */
+  .panels-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:20px;
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:16px 18px 18px;
+  }
+  .panel h3{
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--text-dim);
+    margin-bottom:14px;
+    font-family:'IBM Plex Mono',monospace;
+    text-transform:none;
+  }
+  .empty-note{
+    font-size:12.5px;
+    color:var(--text-faint);
+    font-family:'IBM Plex Mono',monospace;
+    padding:18px 0;
+  }
+
+  /* bar chart (pass/fail) */
+  .barchart{
+    display:flex;
+    align-items:flex-end;
+    gap:18px;
+    height:120px;
+    padding-top:10px;
+  }
+  .bar-col{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    flex:1;
+  }
+  .bar-track{
+    width:100%;
+    max-width:64px;
+    height:90px;
+    display:flex;
+    align-items:flex-end;
+    background:var(--panel-alt);
+    border:1px solid var(--border);
+  }
+  .bar-fill{
+    width:100%;
+    transition:height .4s ease;
+  }
+  .bar-col .n{ font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; }
+  .bar-col .l{ font-size:11px; color:var(--text-dim); }
+
+  /* horizontal fault-type bars */
+  .hbar-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+    font-size:12px;
+  }
+  .hbar-label{
+    width:96px;
+    flex-shrink:0;
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--text-dim);
+    font-size:11.5px;
+  }
+  .hbar-track{
+    flex:1;
+    height:14px;
+    background:var(--panel-alt);
+    border:1px solid var(--border);
+    position:relative;
+    overflow:hidden;
+  }
+  .hbar-fill{
+    height:100%;
+    background:var(--amber);
+  }
+  .hbar-count{
+    width:22px;
+    text-align:right;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    color:var(--text-dim);
+  }
+
+  /* memory map */
+  .mem-map{
+    display:grid;
+    grid-template-columns:repeat(8, 1fr);
+    gap:6px;
+    max-width:420px;
+  }
+  .mem-cell{
+    aspect-ratio:1;
+    border:1px solid var(--border-bright);
+    background:var(--panel-alt);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    cursor:pointer;
+    position:relative;
+  }
+  .mem-cell .addr{ font-size:9px; color:var(--text-faint); position:absolute; top:3px; left:4px; }
+  .mem-cell:hover{ border-color:var(--accent); }
+  .mem-cell.written{ background:#1c2530; color:var(--text); }
+  .mem-cell.selected{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .mem-cell.passed{ background:rgba(110,231,168,0.10); border-color:#3a6b52; color:var(--good); }
+  .mem-cell.faulty{ background:rgba(255,107,107,0.12); border-color:#6b3a3a; color:var(--danger); }
+
+  .legend{
+    display:flex;
+    gap:16px;
+    margin-top:14px;
+    flex-wrap:wrap;
+    font-size:11px;
+    color:var(--text-dim);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .legend i{ width:9px; height:9px; display:inline-block; border:1px solid var(--border-bright); }
+  .legend i.idle{ background:var(--panel-alt); }
+  .legend i.written{ background:#1c2530; }
+  .legend i.selected{ background:var(--panel-alt); border-color:var(--accent); }
+  .legend i.passed{ background:rgba(110,231,168,0.10); border-color:#3a6b52; }
+  .legend i.faulty{ background:rgba(255,107,107,0.12); border-color:#6b3a3a; }
+
+  /* ---------- simulator ---------- */
+  .sim-layout{
+    display:grid;
+    grid-template-columns:420px 1fr;
+    gap:22px;
+    align-items:start;
+  }
+  .byte-inspector{
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:18px;
+  }
+  .byte-inspector .addr-title{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .bit-row{
+    display:flex;
+    gap:6px;
+    margin-bottom:14px;
+  }
+  .bit{
+    flex:1;
+    aspect-ratio:1;
+    border:1px solid var(--border-bright);
+    background:var(--panel-alt);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .bit:hover{ border-color:var(--accent); }
+  .bit.on{ background:rgba(79,216,196,0.14); color:var(--accent); border-color:var(--accent-dim); }
+  .bit.fault{ outline:1px solid var(--danger); }
+  .field-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    padding:7px 0;
+    border-bottom:1px solid var(--border);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .field-row .k{ color:var(--text-faint); }
+  .field-row .v{ color:var(--text); }
+  .field-row .v.fault{ color:var(--danger); }
+
+  .btn{
+    background:var(--panel-alt);
+    border:1px solid var(--border-bright);
+    color:var(--text);
+    padding:9px 14px;
+    font-size:12.5px;
+    font-weight:500;
+    border-radius:3px;
+  }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn.primary{
+    background:rgba(79,216,196,0.10);
+    border-color:var(--accent-dim);
+    color:var(--accent);
+  }
+  .btn.primary:hover{ background:rgba(79,216,196,0.18); }
+  .btn.danger{
+    background:rgba(255,107,107,0.08);
+    border-color:var(--danger-dim);
+    color:var(--danger);
+  }
+  .btn.danger:hover{ background:rgba(255,107,107,0.16); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .btn-row{ display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+
+  /* ---------- fault injection ---------- */
+  .form-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:20px;
+    max-width:480px;
+  }
+  .form-group{ margin-bottom:16px; }
+  .form-group label{
+    display:block;
+    font-size:11.5px;
+    color:var(--text-dim);
+    font-family:'IBM Plex Mono',monospace;
+    margin-bottom:7px;
+  }
+  select, input[type=number]{
+    width:100%;
+    background:var(--panel-alt);
+    border:1px solid var(--border-bright);
+    color:var(--text);
+    padding:9px 10px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    border-radius:3px;
+  }
+  select:focus, input:focus{ outline:1px solid var(--accent); }
+  .fault-list{
+    margin-top:22px;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+  }
+  th{
+    text-align:left;
+    color:var(--text-faint);
+    font-weight:500;
+    font-size:10.5px;
+    padding:8px 10px;
+    border-bottom:1px solid var(--border-bright);
+  }
+  td{
+    padding:9px 10px;
+    border-bottom:1px solid var(--border);
+    color:var(--text-dim);
+  }
+  tr:hover td{ color:var(--text); }
+  .tag{
+    display:inline-block;
+    padding:2px 7px;
+    border-radius:2px;
+    font-size:10.5px;
+  }
+  .tag.stuck0, .tag.stuck1{ background:rgba(244,184,96,0.14); color:var(--amber); }
+  .tag.flip{ background:rgba(79,216,196,0.14); color:var(--accent); }
+  .tag.readf{ background:rgba(255,107,107,0.14); color:var(--danger); }
+  .clear-link{
+    background:none; border:none; color:var(--text-faint); font-family:'IBM Plex Mono',monospace;
+    font-size:11px; text-decoration:underline; padding:0;
+  }
+  .clear-link:hover{ color:var(--danger); }
+
+  /* ---------- test cases ---------- */
+  .test-list{ display:flex; flex-direction:column; gap:10px; max-width:640px; }
+  .test-card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+  }
+  .test-card .info h4{ font-size:13.5px; font-weight:600; margin-bottom:4px; }
+  .test-card .info p{ font-size:12px; color:var(--text-dim); font-family:'IBM Plex Mono',monospace; }
+  .test-card .result{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    min-width:90px;
+    text-align:right;
+  }
+  .test-card .result.pass{ color:var(--good); }
+  .test-card .result.fail{ color:var(--danger); }
+  .test-card .result.none{ color:var(--text-faint); }
+
+  /* ---------- report ---------- */
+  .report-toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+
+  @media (max-width: 880px){
+    .body-wrap{ flex-direction:column; }
+    nav.sidebar{
+      width:100%;
+      flex-direction:row;
+      overflow-x:auto;
+      border-right:none;
+      border-bottom:1px solid var(--border);
+      padding:10px 12px;
+    }
+    nav.sidebar button{ white-space:nowrap; border-left:none; border-bottom:2px solid transparent; }
+    nav.sidebar button.active{ border-left:none; border-bottom:2px solid var(--accent); }
+    main{ padding:20px 16px 50px; }
+    .stats-row{ grid-template-columns:repeat(3,1fr); }
+    .panels-row{ grid-template-columns:1fr; }
+    .sim-layout{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>Memory Fault Injection Testing Tool</h1>
+      <p>simulated memory &middot; fault injection &middot; automated detection</p>
+    </div>
+    <div class="status-pill"><span class="status-dot"></span><span id="onlineLabel">16 BYTES ONLINE</span></div>
+  </div>
+
+  <div class="body-wrap">
+    <nav class="sidebar" id="sidebar">
+      <button class="nav-btn active" data-view="dashboard"><span class="ico">01</span>Dashboard</button>
+      <button class="nav-btn" data-view="simulator"><span class="ico">02</span>Memory Simulator</button>
+      <button class="nav-btn" data-view="injection"><span class="ico">03</span>Fault Injection</button>
+      <button class="nav-btn" data-view="tests"><span class="ico">04</span>Test Cases</button>
+      <button class="nav-btn" data-view="report"><span class="ico">05</span>Fault Report</button>
+    </nav>
+
+    <main>
+
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="view-title">Dashboard</div>
+        <div class="view-sub">live status of the simulated memory array</div>
+
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-label">TOTAL TESTS</div><div class="stat-value" id="stat-total">0</div></div>
+          <div class="stat-card"><div class="stat-label">PASSED</div><div class="stat-value good" id="stat-passed">0</div></div>
+          <div class="stat-card"><div class="stat-label">FAILED</div><div class="stat-value bad" id="stat-failed">0</div></div>
+          <div class="stat-card"><div class="stat-label">FAULTS DETECTED</div><div class="stat-value bad" id="stat-faults">0</div></div>
+          <div class="stat-card"><div class="stat-label">DETECTION RATE</div><div class="stat-value accent" id="stat-rate">0%</div></div>
+          <div class="stat-card"><div class="stat-label">MEMORY SIZE</div><div class="stat-value" id="stat-size">16 B</div></div>
+        </div>
+
+        <div class="panels-row">
+          <div class="panel">
+            <h3>PASSED VS FAILED TESTS</h3>
+            <div id="barchart-wrap"></div>
+          </div>
+          <div class="panel">
+            <h3>FAULTS BY TYPE</h3>
+            <div id="faultsbytype-wrap"><div class="empty-note">No faults detected yet. Run a test to populate this chart.</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>MEMORY MAP</h3>
+          <div class="mem-map" id="mem-map-dash"></div>
+          <div class="legend">
+            <span><i class="idle"></i>idle</span>
+            <span><i class="written"></i>written</span>
+            <span><i class="passed"></i>passed</span>
+            <span><i class="faulty"></i>faulty</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SIMULATOR -->
+      <section class="view" id="view-simulator">
+        <div class="view-title">Memory Simulator</div>
+        <div class="view-sub">select a byte to inspect and edit its stored value</div>
+
+        <div class="sim-layout">
+          <div class="mem-map" id="mem-map-sim"></div>
+
+          <div class="byte-inspector">
+            <div class="addr-title" id="ins-addr">ADDR 0x0 &mdash; select a byte</div>
+
+            <div class="bit-row" id="bit-row"></div>
+
+            <div class="field-row"><span class="k">RAW (WRITTEN)</span><span class="v" id="ins-raw">0x00</span></div>
+            <div class="field-row"><span class="k">EFFECTIVE (READ)</span><span class="v" id="ins-eff">0x00</span></div>
+            <div class="field-row"><span class="k">FAULT</span><span class="v" id="ins-fault">none</span></div>
+            <div class="field-row"><span class="k">STATUS</span><span class="v" id="ins-status">idle</span></div>
+
+            <div class="btn-row">
+              <button class="btn primary" id="btn-write">Write value</button>
+              <button class="btn" id="btn-read">Read byte</button>
+              <button class="btn danger" id="btn-clear-byte">Clear fault</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAULT INJECTION -->
+      <section class="view" id="view-injection">
+        <div class="view-title">Fault Injection</div>
+        <div class="view-sub">introduce a hardware-style fault at a chosen address and bit</div>
+
+        <div class="form-panel">
+          <div class="form-group">
+            <label>ADDRESS</label>
+            <select id="fi-addr"></select>
+          </div>
+          <div class="form-group">
+            <label>FAULT TYPE</label>
+            <select id="fi-type">
+              <option value="stuck0">Stuck-at-0</option>
+              <option value="stuck1">Stuck-at-1</option>
+              <option value="flip">Bit-flip</option>
+              <option value="read">Read fault (flaky)</option>
+            </select>
+          </div>
+          <div class="form-group" id="fi-bit-group">
+            <label>BIT INDEX (0&ndash;7)</label>
+            <input type="number" id="fi-bit" min="0" max="7" value="0">
+          </div>
+          <button class="btn danger" id="btn-inject">Inject fault</button>
+        </div>
+
+        <div class="fault-list">
+          <div class="report-toolbar">
+            <h3 class="mono" style="font-size:12.5px;color:var(--text-dim);">INJECTED FAULTS</h3>
+            <button class="clear-link" id="btn-clear-all">clear all injected faults</button>
+          </div>
+          <table>
+            <thead><tr><th>ADDR</th><th>TYPE</th><th>BIT</th></tr></thead>
+            <tbody id="injected-body"></tbody>
+          </table>
+          <div class="empty-note" id="injected-empty">No faults injected.</div>
+        </div>
+      </section>
+
+      <!-- TEST CASES -->
+      <section class="view" id="view-tests">
+        <div class="view-title">Test Cases</div>
+        <div class="view-sub">run a test pattern across all 16 bytes to detect injected faults</div>
+
+        <div class="test-list" id="test-list"></div>
+      </section>
+
+      <!-- FAULT REPORT -->
+      <section class="view" id="view-report">
+        <div class="view-title">Fault Report</div>
+        <div class="view-sub">faults confirmed by test runs, in detection order</div>
+
+        <div class="report-toolbar">
+          <span class="mono" style="font-size:12px;color:var(--text-dim);" id="report-count">0 faults detected</span>
+          <button class="btn" id="btn-export">Export report (.csv)</button>
+        </div>
+
+        <table>
+          <thead><tr><th>#</th><th>TIME</th><th>ADDR</th><th>TEST</th><th>FAULT TYPE</th><th>BIT</th><th>EXPECTED</th><th>ACTUAL</th></tr></thead>
+          <tbody id="report-body"></tbody>
+        </table>
+        <div class="empty-note" id="report-empty">No faults detected yet. Run a test case to populate this report.</div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  const N = 16;
+  const FAULT_LABEL = { stuck0:"Stuck-at-0", stuck1:"Stuck-at-1", flip:"Bit-flip", read:"Read fault" };
+  const FAULT_TAG = { stuck0:"stuck0", stuck1:"stuck1", flip:"flip", read:"readf" };
+
+  // memory[i] = { raw: 0-255, written:bool, fault: {type, bit} | null }
+  let memory = Array.from({length:N}, () => ({ raw:0, written:false, fault:null }));
+  let selected = 0;
+  let testResults = [];   // {name, pass, timestamp}
+  let faultLog = [];      // {addr, testName, type, bit, expected, actual, timestamp}
+  let statusMap = {};     // addr -> 'passed' | 'faulty' (last outcome, for map coloring)
+
+  const TESTS = [
+    { id:"zeros", name:"All-Zeros March", desc:"writes 0x00 to every byte, then reads it back",
+      pattern:(a)=>0 },
+    { id:"ones", name:"All-Ones March", desc:"writes 0xFF to every byte, then reads it back",
+      pattern:(a)=>255 },
+    { id:"checker", name:"Checkerboard", desc:"alternates 0xAA / 0x55 by address parity",
+      pattern:(a)=> a % 2 === 0 ? 0b10101010 : 0b01010101 },
+    { id:"walking", name:"Walking Bit", desc:"sets a single bit, position = address mod 8",
+      pattern:(a)=> 1 << (a % 8) },
+  ];
+  let lastTestRun = {}; // id -> 'pass'|'fail'
+
+  function effectiveValue(i, forRead){
+    const cell = memory[i];
+    let v = cell.raw;
+    const f = cell.fault;
+    if (!f) return v;
+    if (f.type === 'stuck0') v = v & ~(1 << f.bit) & 0xFF;
+    else if (f.type === 'stuck1') v = v | (1 << f.bit);
+    else if (f.type === 'flip') v = (v ^ (1 << f.bit)) & 0xFF;
+    else if (f.type === 'read' && forRead) v = (v ^ (1 << Math.floor(Math.random()*8))) & 0xFF;
+    return v & 0xFF;
+  }
+
+  function writeByte(i, val){
+    memory[i].raw = val & 0xFF;
+    memory[i].written = true;
+  }
+
+  function hex(v){ return '0x' + v.toString(16).toUpperCase().padStart(2,'0'); }
+  function bin(v){ return v.toString(2).padStart(8,'0'); }
+  function nowStr(){
+    const d = new Date();
+    return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }
+
+  // ---------- navigation ----------
+  document.querySelectorAll('.nav-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const view = btn.dataset.view;
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      document.getElementById('view-' + view).classList.add('active');
+      renderAll();
+    });
+  });
+
+  // ---------- memory map rendering ----------
+  function buildMemMap(container, clickable){
+    container.innerHTML = '';
+    for (let i=0;i<N;i++){
+      const cell = document.createElement('div');
+      cell.className = 'mem-cell';
+      cell.dataset.addr = i;
+      const c = memory[i];
+      if (c.written) cell.classList.add('written');
+      if (statusMap[i] === 'passed') cell.classList.add('passed');
+      if (statusMap[i] === 'faulty') cell.classList.add('faulty');
+      if (clickable && i === selected) cell.classList.add('selected');
+      cell.innerHTML = `<span class="addr">${i}</span><span>${hex(c.raw)}</span>`;
+      if (clickable){
+        cell.addEventListener('click', ()=>{ selected = i; renderAll(); });
+      }
+      container.appendChild(cell);
+    }
+  }
+
+  // ---------- dashboard ----------
+  function renderDashboard(){
+    const total = testResults.length;
+    const passed = testResults.filter(t=>t.pass).length;
+    const failed = total - passed;
+    const faultsDetected = faultLog.length;
+    const injectedCount = memory.filter(c=>c.fault).length;
+    const uniqueDetectedAddrs = new Set(faultLog.map(f=>f.addr)).size;
+    const rate = injectedCount === 0 ? 0 : Math.min(100, Math.round((uniqueDetectedAddrs / injectedCount) * 100));
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-passed').textContent = passed;
+    document.getElementById('stat-failed').textContent = failed;
+    document.getElementById('stat-faults').textContent = faultsDetected;
+    document.getElementById('stat-rate').textContent = rate + '%';
+
+    // bar chart
+    const bw = document.getElementById('barchart-wrap');
+    const max = Math.max(passed, failed, 1);
+    bw.innerHTML = `
+      <div class="barchart">
+        <div class="bar-col">
+          <div class="n">${passed}</div>
+          <div class="bar-track"><div class="bar-fill" style="height:${(passed/max*100)}%;background:var(--good);"></div></div>
+          <div class="l">passed</div>
+        </div>
+        <div class="bar-col">
+          <div class="n">${failed}</div>
+          <div class="bar-track"><div class="bar-fill" style="height:${(failed/max*100)}%;background:var(--danger);"></div></div>
+          <div class="l">failed</div>
+        </div>
+      </div>`;
+
+    // faults by type
+    const counts = {};
+    faultLog.forEach(f=>{ counts[f.type] = (counts[f.type]||0)+1; });
+    const fbt = document.getElementById('faultsbytype-wrap');
+    const keys = Object.keys(counts);
+    if (keys.length === 0){
+      fbt.innerHTML = '<div class="empty-note">No faults detected yet. Run a test to populate this chart.</div>';
+    } else {
+      const maxC = Math.max(...keys.map(k=>counts[k]));
+      fbt.innerHTML = keys.map(k=>`
+        <div class="hbar-row">
+          <div class="hbar-label">${FAULT_LABEL[k]}</div>
+          <div class="hbar-track"><div class="hbar-fill" style="width:${(counts[k]/maxC*100)}%;"></div></div>
+          <div class="hbar-count">${counts[k]}</div>
+        </div>`).join('');
+    }
+
+    buildMemMap(document.getElementById('mem-map-dash'), false);
+    document.getElementById('onlineLabel').textContent = N + ' BYTES ONLINE';
+  }
+
+  // ---------- simulator ----------
+  function renderSimulator(){
+    buildMemMap(document.getElementById('mem-map-sim'), true);
+    const c = memory[selected];
+    document.getElementById('ins-addr').textContent = `ADDR ${selected}  (0x${selected.toString(16).toUpperCase()})`;
+
+    const raw = c.raw;
+    const eff = effectiveValue(selected, true);
+
+    const bitRow = document.getElementById('bit-row');
+    bitRow.innerHTML = '';
+    for (let b=7;b>=0;b--){
+      const on = (raw >> b) & 1;
+      const div = document.createElement('div');
+      div.className = 'bit' + (on ? ' on' : '') + ((c.fault && c.fault.bit===b) ? ' fault' : '');
+      div.textContent = on;
+      div.addEventListener('click', ()=>{
+        const newVal = raw ^ (1 << b);
+        writeByte(selected, newVal);
+        renderAll();
+      });
+      bitRow.appendChild(div);
+    }
+
+    document.getElementById('ins-raw').textContent = hex(raw) + '  ' + bin(raw);
+    const effEl = document.getElementById('ins-eff');
+    effEl.textContent = hex(eff) + '  ' + bin(eff);
+    effEl.className = 'v' + (eff !== raw ? ' fault' : '');
+
+    const faultEl = document.getElementById('ins-fault');
+    if (c.fault){
+      faultEl.textContent = `${FAULT_LABEL[c.fault.type]}${c.fault.type==='read' ? '' : ' @ bit ' + c.fault.bit}`;
+      faultEl.className = 'v fault';
+    } else {
+      faultEl.textContent = 'none';
+      faultEl.className = 'v';
+    }
+
+    document.getElementById('ins-status').textContent = statusMap[selected] || (c.written ? 'written' : 'idle');
+    document.getElementById('btn-clear-byte').disabled = !c.fault;
+  }
+
+  document.getElementById('btn-write').addEventListener('click', ()=>{
+    writeByte(selected, memory[selected].raw);
+    delete statusMap[selected];
+    renderAll();
+  });
+  document.getElementById('btn-read').addEventListener('click', ()=>{
+    renderAll(); // recompute effective (randomizes read-fault bytes)
+  });
+  document.getElementById('btn-clear-byte').addEventListener('click', ()=>{
+    memory[selected].fault = null;
+    renderAll();
+  });
+
+  // ---------- fault injection ----------
+  const fiAddr = document.getElementById('fi-addr');
+  for (let i=0;i<N;i++){
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = `Addr ${i} (0x${i.toString(16).toUpperCase()})`;
+    fiAddr.appendChild(opt);
+  }
+  document.getElementById('fi-type').addEventListener('change', (e)=>{
+    document.getElementById('fi-bit-group').style.display = e.target.value === 'read' ? 'none' : 'block';
+  });
+
+  document.getElementById('btn-inject').addEventListener('click', ()=>{
+    const addr = parseInt(fiAddr.value, 10);
+    const type = document.getElementById('fi-type').value;
+    const bit = Math.max(0, Math.min(7, parseInt(document.getElementById('fi-bit').value || 0, 10)));
+    memory[addr].fault = { type, bit: type === 'read' ? null : bit };
+    delete statusMap[addr];
+    renderAll();
+  });
+  document.getElementById('btn-clear-all').addEventListener('click', ()=>{
+    memory.forEach(c=> c.fault = null);
+    statusMap = {};
+    renderAll();
+  });
+
+  function renderInjection(){
+    const tbody = document.getElementById('injected-body');
+    const rows = memory.map((c,i)=> c.fault ? {i, f:c.fault} : null).filter(Boolean);
+    tbody.innerHTML = rows.map(r=>`
+      <tr>
+        <td>${hex(r.i)}</td>
+        <td><span class="tag ${FAULT_TAG[r.f.type]}">${FAULT_LABEL[r.f.type]}</span></td>
+        <td>${r.f.type === 'read' ? '&mdash;' : r.f.bit}</td>
+      </tr>`).join('');
+    document.getElementById('injected-empty').style.display = rows.length ? 'none' : 'block';
+  }
+
+  // ---------- test cases ----------
+  function renderTests(){
+    const list = document.getElementById('test-list');
+    list.innerHTML = '';
+    TESTS.forEach(t=>{
+      const card = document.createElement('div');
+      card.className = 'test-card';
+      const res = lastTestRun[t.id];
+      card.innerHTML = `
+        <div class="info">
+          <h4>${t.name}</h4>
+          <p>${t.desc}</p>
+        </div>
+        <div class="result ${res==='pass'?'pass':res==='fail'?'fail':'none'}">${res==='pass'?'PASS':res==='fail'?'FAIL':'not run'}</div>
+        <button class="btn primary">Run</button>
+      `;
+      card.querySelector('button').addEventListener('click', ()=> runTest(t));
+      list.appendChild(card);
+    });
+  }
+
+  function runTest(t){
+    let allPass = true;
+    for (let i=0;i<N;i++){
+      const expected = t.pattern(i) & 0xFF;
+      writeByte(i, expected);
+      const actual = effectiveValue(i, true);
+      const pass = actual === expected;
+      testResults.push({ name:t.name, pass, timestamp:Date.now() });
+      if (pass){
+        statusMap[i] = 'passed';
+      } else {
+        statusMap[i] = 'faulty';
+        allPass = false;
+        faultLog.push({
+          addr:i, testName:t.name,
+          type: memory[i].fault ? memory[i].fault.type : 'unknown',
+          bit: memory[i].fault && memory[i].fault.bit !== null && memory[i].fault.bit !== undefined ? memory[i].fault.bit : '—',
+          expected: hex(expected), actual: hex(actual),
+          timestamp: nowStr()
+        });
+      }
+    }
+    lastTestRun[t.id] = allPass ? 'pass' : 'fail';
+    renderAll();
+  }
+
+  // ---------- report ----------
+  function renderReport(){
+    const tbody = document.getElementById('report-body');
+    document.getElementById('report-count').textContent = faultLog.length + ' fault' + (faultLog.length===1?'':'s') + ' detected';
+    if (faultLog.length === 0){
+      tbody.innerHTML = '';
+      document.getElementById('report-empty').style.display = 'block';
+      return;
+    }
+    document.getElementById('report-empty').style.display = 'none';
+    tbody.innerHTML = faultLog.map((f, idx)=>`
+      <tr>
+        <td>${idx+1}</td>
+        <td>${f.timestamp}</td>
+        <td>${hex(f.addr)}</td>
+        <td>${f.testName}</td>
+        <td><span class="tag ${FAULT_TAG[f.type] || ''}">${FAULT_LABEL[f.type] || f.type}</span></td>
+        <td>${f.bit}</td>
+        <td>${f.expected}</td>
+        <td>${f.actual}</td>
+      </tr>`).join('');
+  }
+
+  document.getElementById('btn-export').addEventListener('click', ()=>{
+    const header = ['#','time','address','test','fault_type','bit','expected','actual'];
+    const rows = faultLog.map((f,idx)=>[idx+1, f.timestamp, hex(f.addr), f.testName, FAULT_LABEL[f.type]||f.type, f.bit, f.expected, f.actual]);
+    const csv = [header, ...rows].map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'fault-report.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- render all ----------
+  function renderAll(){
+    renderDashboard();
+    renderSimulator();
+    renderInjection();
+    renderTests();
+    renderReport();
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
